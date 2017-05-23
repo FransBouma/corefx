@@ -210,10 +210,11 @@ namespace System.Net.Tests
             }
         }
 
-        [Fact]
-        public void Add_PrefixAlreadyRegisteredAndNotStarted_ThrowsHttpListenerException()
+        [ConditionalTheory(nameof(PlatformDetection) + "." + nameof(PlatformDetection.IsNotOneCoreUAP))]
+        [MemberData(nameof(Hosts_TestData))]
+        public void Add_PrefixAlreadyRegisteredAndNotStarted_ThrowsHttpListenerException(string hostname)
         {
-            using (var factory = new HttpListenerFactory())
+            using (var factory = new HttpListenerFactory(hostname))
             {
                 string uriPrefix = Assert.Single(factory.GetListener().Prefixes);
 
@@ -224,10 +225,28 @@ namespace System.Net.Tests
             }
         }
 
-        [Fact]
-        public void Add_PrefixAlreadyRegisteredAndStarted_ThrowsHttpListenerException()
+        [ConditionalTheory(nameof(PlatformDetection) + "." + nameof(PlatformDetection.IsNotOneCoreUAP))]
+        [MemberData(nameof(Hosts_TestData))]
+        public void Add_PrefixAlreadyRegisteredWithDifferentPathAndNotStarted_Works(string hostname)
         {
-            using (var factory = new HttpListenerFactory())
+            using (var factory = new HttpListenerFactory(hostname))
+            {
+                var listener = factory.GetListener();
+                string uriPrefix = Assert.Single(listener.Prefixes);
+
+                listener.Prefixes.Add(uriPrefix + "sub_path/");
+                Assert.Equal(2, listener.Prefixes.Count);
+
+                listener.Start();
+                Assert.True(listener.IsListening);
+            }
+        }
+
+        [ConditionalTheory(nameof(PlatformDetection) + "." + nameof(PlatformDetection.IsNotOneCoreUAP))]
+        [MemberData(nameof(Hosts_TestData))]
+        public void Add_PrefixAlreadyRegisteredAndStarted_ThrowsHttpListenerException(string hostname)
+        {
+            using (var factory = new HttpListenerFactory(hostname))
             {
                 HttpListener listener = factory.GetListener();
                 string uriPrefix = Assert.Single(listener.Prefixes);
@@ -237,13 +256,97 @@ namespace System.Net.Tests
             }
         }
 
+        public static IEnumerable<object[]> Hosts_TestData()
+        {
+            yield return new object[] { "localhost" };
+            yield return new object[] { "127.0.0.1" };
+
+            if (HttpListenerFactory.SupportsWildcards)
+            {
+                yield return new object[] { "*" };
+                yield return new object[] { "+" };
+            }
+        }
+        
+        [ConditionalTheory(nameof(PlatformDetection) + "." + nameof(PlatformDetection.IsNotOneCoreUAP))]
+        [MemberData(nameof(Hosts_TestData))]
+        public void Add_SamePortDifferentPathDifferentListenerNotStarted_Works(string host)
+        {
+            using (var factory1 = new HttpListenerFactory(host, path: string.Empty))
+            {
+                HttpListener listener1 = factory1.GetListener();
+                using (var listener2 = new HttpListener())
+                {
+                    string prefixWithSubPath = $"{factory1.ListeningUrl}sub_path/";
+                    listener2.Prefixes.Add(prefixWithSubPath);
+                    Assert.Equal(prefixWithSubPath, Assert.Single(listener2.Prefixes));
+
+                    listener2.Start();
+                    Assert.True(listener2.IsListening);
+                }
+            }
+        }
+
+        [ConditionalTheory(nameof(PlatformDetection) + "." + nameof(PlatformDetection.IsNotOneCoreUAP))]
+        [MemberData(nameof(Hosts_TestData))]
+        public void Add_SamePortDifferentPathDifferentListenerStarted_Works(string host)
+        {
+            using (var factory1 = new HttpListenerFactory(host, path: string.Empty))
+            using (var factory2 = new HttpListenerFactory(host, path: string.Empty))
+            {
+                HttpListener listener1 = factory1.GetListener();
+                HttpListener listener2 = factory2.GetListener();
+                string prefix1 = factory1.ListeningUrl;
+                string prefix2 = factory2.ListeningUrl;
+
+                listener1.Prefixes.Add($"{prefix2}hola/");
+                listener2.Prefixes.Add($"{prefix1}hola/");
+
+                Assert.Equal(2, listener1.Prefixes.Count);
+                Assert.Equal(2, listener2.Prefixes.Count);
+
+                // Conflicts with existing registration: listener2 has registered to listen to http://127.0.0.1:{freePort1}/...
+                Assert.Throws<HttpListenerException>(() => listener1.Prefixes.Add(prefix1));
+                Assert.Throws<HttpListenerException>(() => listener1.Prefixes.Add($"{prefix1}hola/"));
+
+                // Conflicts with existing registration: listener1 has registered to listen to http://127.0.0.1:{freePort2}/...
+                Assert.Throws<HttpListenerException>(() => listener2.Prefixes.Add(prefix2));
+                Assert.Throws<HttpListenerException>(() => listener2.Prefixes.Add($"{prefix2}hola/"));
+            }
+        }
+
+        [ConditionalTheory(nameof(PlatformDetection) + "." + nameof(PlatformDetection.IsNotOneCoreUAP))]
+        [MemberData(nameof(Hosts_TestData))]
+        public void Add_SamePortDifferentPathMultipleStarted_Success(string host)
+        {
+            using (var factory1 = new HttpListenerFactory(host, path: string.Empty))
+            using (var factory2 = new HttpListenerFactory(host, path: string.Empty))
+            {
+                HttpListener listener1 = factory1.GetListener();
+                HttpListener listener2 = factory2.GetListener();
+                string prefix1 = factory1.ListeningUrl;
+                string prefix2 = factory2.ListeningUrl;
+
+                listener1.Prefixes.Add($"{prefix1}hola/");
+                Assert.Equal(2, listener1.Prefixes.Count);
+
+                listener2.Prefixes.Add($"{prefix2}hola/");
+                Assert.Equal(2, listener2.Prefixes.Count);
+
+                // Conflict: listenerX is already listening to $"http://127.0.0.1:{freePortX}/hola/".
+                Assert.Throws<HttpListenerException>(() => listener1.Prefixes.Add($"{prefix1}hola/"));
+                Assert.Throws<HttpListenerException>(() => listener2.Prefixes.Add($"{prefix2}hola/"));
+
+                // Conflict: listenerX is already listening to $"http://127.0.0.1:{freePortY}/hola/".
+                Assert.Throws<HttpListenerException>(() => listener1.Prefixes.Add($"{prefix2}hola/"));
+                Assert.Throws<HttpListenerException>(() => listener2.Prefixes.Add($"{prefix2}hola/"));
+            }
+        }
+
         public static IEnumerable<object[]> InvalidPrefix_TestData()
         {
-            // [ActiveIssue(19593, TestPlatforms.OSX)]
-            if (!PlatformDetection.IsOSX)
-            {
-                yield return new object[] { $"http://{Guid.NewGuid().ToString("N")}/" };
-            }
+            yield return new object[] { "http://0.0.0.0/" };
+            yield return new object[] { "http://192./" };
             yield return new object[] { "http://[]/" };
             yield return new object[] { "http://[::1%2]/" };
             yield return new object[] { "http://[::]/" };
@@ -256,7 +359,7 @@ namespace System.Net.Tests
             yield return new object[] { "http://\\/" };
         }
 
-        [ActiveIssue(19619)]
+        [SkipOnTargetFramework(TargetFrameworkMonikers.NetFramework)] // Issue #19619
         [Theory]
         [MemberData(nameof(InvalidPrefix_TestData))]
         public void Add_InvalidPrefixNotStarted_ThrowsHttpListenerExceptionOnStart(string uriPrefix)
@@ -269,7 +372,7 @@ namespace System.Net.Tests
             Assert.Throws<HttpListenerException>(() => listener.Start());
         }
 
-        [ActiveIssue(19619)]
+        [SkipOnTargetFramework(TargetFrameworkMonikers.NetFramework)] // Issue #19619
         [Theory]
         [MemberData(nameof(InvalidPrefix_TestData))]
         public void Add_InvalidPrefixAlreadyStarted_ThrowsHttpListenerExceptionOnAdd(string uriPrefix)
@@ -281,16 +384,6 @@ namespace System.Net.Tests
 
                 Assert.Throws<HttpListenerException>(() => listener.Prefixes.Add(uriPrefix));
             }
-        }
-
-        [ActiveIssue(19619)]
-        [Theory]
-        [ActiveIssue(18128, TestPlatforms.AnyUnix)] // Fails by design on Windows but is allowed by the managed implementation
-        [InlineData("http://192./")]
-        public void Add_InvalidPrefix_ThrowsHttpListenerException_Windows(string uriPrefix)
-        {
-            Add_InvalidPrefixNotStarted_ThrowsHttpListenerExceptionOnStart(uriPrefix);
-            Add_InvalidPrefixAlreadyStarted_ThrowsHttpListenerExceptionOnAdd(uriPrefix);
         }
 
         [Theory]
