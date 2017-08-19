@@ -9,7 +9,7 @@ using Xunit;
 
 namespace System.Tests
 {
-    public static partial class ArrayTests
+    public partial class ArrayTests
     {
         public static IEnumerable<object[]> Fill_Generic_TestData()
         {
@@ -53,7 +53,6 @@ namespace System.Tests
 
         [Theory]
         [MemberData(nameof(Fill_Generic_TestData))]
-        [ActiveIssue("TFS 437849 - Universal Shared Generics issue", TargetFrameworkMonikers.UapAot)]
         public static void Fill_Generic<T>(IEnumerable<T> source, T value, int startIndex, int count)
         {
             if (startIndex == 0 && count == source.Count())
@@ -138,18 +137,21 @@ namespace System.Tests
         [InlineData(3, 0, 4)]
         public static void Reverse_Generic_InvalidOffsetPlusLength_ThrowsArgumentException(int arrayLength, int index, int length)
         {
-            Assert.Throws<ArgumentException>(null, () => Array.Reverse(new string[arrayLength], index, length));
+            AssertExtensions.Throws<ArgumentException>(null, () => Array.Reverse(new string[arrayLength], index, length));
         }
 
         [Fact]
-        [ActiveIssue("https://github.com/dotnet/corert/issues/3650 - Wrong exception thrown", TargetFrameworkMonikers.UapAot)]
-        public static void CreateInstance_TypeNotRuntimeType_ThrowsArgumentException()
+        public void CreateInstance_TypeNotRuntimeType_ThrowsArgumentException()
         {
-            foreach (Type nonRuntimeType in Helpers.NonRuntimeTypes)
+            // This cannot be a [Theory] due to https://github.com/xunit/xunit/issues/1325.
+            foreach (Type elementType in Helpers.NonRuntimeTypes)
             {
-                AssertExtensions.Throws<ArgumentException>("elementType", () => Array.CreateInstance(nonRuntimeType, 0));
-                AssertExtensions.Throws<ArgumentException>("elementType", () => Array.CreateInstance(nonRuntimeType, new int[1]));
-                AssertExtensions.Throws<ArgumentException>("elementType", () => Array.CreateInstance(nonRuntimeType, new int[1], new int[1]));
+                AssertExtensions.Throws<ArgumentException>("elementType", () => Array.CreateInstance(elementType, 1));
+                AssertExtensions.Throws<ArgumentException>("elementType", () => Array.CreateInstance(elementType, 1, 1));
+                AssertExtensions.Throws<ArgumentException>("elementType", () => Array.CreateInstance(elementType, 1, 1, 1));
+                AssertExtensions.Throws<ArgumentException>("elementType", () => Array.CreateInstance(elementType, new int[1]));
+                AssertExtensions.Throws<ArgumentException>("elementType", () => Array.CreateInstance(elementType, new long[1]));
+                AssertExtensions.Throws<ArgumentException>("elementType", () => Array.CreateInstance(elementType, new int[1], new int[1]));
             }
         }
     }

@@ -26,7 +26,7 @@
 
   <ItemGroup Condition="'@(BinPlaceConfiguration)' == ''">
     <!-- binplace to directories for the target vertical -->
-    <BinPlaceConfiguration Include="$(BuildConfiguration)">
+    <BinPlaceConfiguration Include="$(_bc_TargetGroup)-$(_bc_OSGroup)">
       <RefPath>$(BuildConfigurationRefPath)</RefPath>
       <RuntimePath>$(RuntimePath)</RuntimePath>
     </BinPlaceConfiguration>
@@ -73,6 +73,10 @@
     <BinPlaceConfiguration Include="netstandard">
       <RefPath>$(RefRootPath)netstandard/</RefPath>
     </BinPlaceConfiguration>
+    <!-- some libraries that produce packages will remain targeting netcoreapp2.0 -->
+    <BinPlaceConfiguration Condition="'$(BuildingNETCoreAppVertical)' == 'true'" Include="netcoreapp2.0">
+      <RefPath>$(RefRootPath)netcoreapp2.0/</RefPath>
+    </BinPlaceConfiguration>
     <!-- for BuildAllConfigurations make sure all refpaths are created.  -->
     <_TargetGroupsWithIsAot Condition="'$(BuildAllConfigurations)' == 'true'" Include="@(TargetGroups)">
       <IsAot>$([System.String]::new('%(Identity)').Contains('aot'))</IsAot>
@@ -92,8 +96,8 @@
   <Import Project="$(MSBuildThisFileDirectory)illink.targets" />
 
   <ItemGroup Condition="'$(NuGetTargetMoniker)'=='.NETStandard,Version=v1.7'">
-    <!-- Temporarily suppress the message until we get a nuget version that knows about the mapping between netstandard1.7 and uap10.1 -->
-    <SuppressPackageTargetFrameworkCompatibility Include="uap10.1" />
+    <!-- Temporarily suppress the message until we get a nuget version that knows about the mapping between netstandard1.7 and uapvNext -->
+    <SuppressPackageTargetFrameworkCompatibility Include="$(UAPvNextTFM)" />
   </ItemGroup>
 
   <Target Name="ProducesPackageId"
@@ -108,6 +112,27 @@
            Condition="'$(BuildConfigurations)' != ''" >
     <Message Importance="Low" Text="$(MSBuildProjectFullPath), C: $(Configuration) BC: $(BuildConfiguration) BCs: $(BuildConfigurations)" />
     <Message Importance="High" Condition="'$(ConfigurationErrorMsg)' != ''" Text="$(MSBuildProjectFullPath) ConfigurationErrorMessage: $(ConfigurationErrorMsg)" />
+  </Target>
+
+  <Target Name="GenerateReferenceSource">
+    <PropertyGroup>
+      <_GenApiExePath>$(ToolsDir)GenApi.exe</_GenApiExePath>
+      <_RefSourceFileOutputPath>$(MSBuildProjectDirectory)/../ref/$(AssemblyName).cs</_RefSourceFileOutputPath>
+      <_ExcludeAPIList>$(MSBuildThisFileDirectory)tools-local/DefaultGenApiDocIds.txt</_ExcludeAPIList>
+      <_LicenseHeaderTxtPath>$(MSBuildThisFileDirectory)tools-local/LicenseHeader.txt</_LicenseHeaderTxtPath>
+    </PropertyGroup>
+
+    <PropertyGroup>
+      <_GenAPICmd>$(DotnetToolCommand) $(_GenApiExePath)</_GenAPICmd>
+      <_GenAPICmd>$(_GenAPICmd) -assembly:$(TargetPath)</_GenAPICmd>
+      <_GenAPICmd>$(_GenAPICmd) -libPath:$(RefPath)</_GenAPICmd>
+      <_GenAPICmd>$(_GenAPICmd) -out:$(_RefSourceFileOutputPath)</_GenAPICmd>
+      <_GenAPICmd>$(_GenAPICmd) -excludeAttributesList:$(_ExcludeAPIList)</_GenAPICmd>
+      <_GenAPICmd>$(_GenAPICmd) -headerFile:$(_LicenseHeaderTxtPath)</_GenAPICmd>
+    </PropertyGroup>
+
+    <Exec Command="$(_GenAPICmd)" />
+    <Message Text="Generated reference assembly source code: $(_RefSourceFileOutputPath)" />
   </Target>
 
 </Project>

@@ -21,9 +21,9 @@ namespace System.IO.MemoryMappedFiles.Tests
         public void InvalidArguments_MapName()
         {
             // Empty string is an invalid map name
-            Assert.Throws<ArgumentException>(() => MemoryMappedFile.CreateNew(string.Empty, 4096));
-            Assert.Throws<ArgumentException>(() => MemoryMappedFile.CreateNew(string.Empty, 4096, MemoryMappedFileAccess.ReadWrite));
-            Assert.Throws<ArgumentException>(() => MemoryMappedFile.CreateNew(string.Empty, 4096, MemoryMappedFileAccess.ReadWrite, MemoryMappedFileOptions.None, HandleInheritability.None));
+            AssertExtensions.Throws<ArgumentException>(null, () => MemoryMappedFile.CreateNew(string.Empty, 4096));
+            AssertExtensions.Throws<ArgumentException>(null, () => MemoryMappedFile.CreateNew(string.Empty, 4096, MemoryMappedFileAccess.ReadWrite));
+            AssertExtensions.Throws<ArgumentException>(null, () => MemoryMappedFile.CreateNew(string.Empty, 4096, MemoryMappedFileAccess.ReadWrite, MemoryMappedFileOptions.None, HandleInheritability.None));
         }
 
         /// <summary>
@@ -152,14 +152,10 @@ namespace System.IO.MemoryMappedFiles.Tests
             {
                 ValidateMemoryMappedFile(mmf, 4096, MemoryMappedFileAccess.Read);
             }
-
-            AssertExtensions.ThrowsIf<UnauthorizedAccessException>(PlatformDetection.IsWinRT, () =>
+            using (MemoryMappedFile mmf = MemoryMappedFile.CreateNew(name, 4096, MemoryMappedFileAccess.ReadWriteExecute, MemoryMappedFileOptions.DelayAllocatePages, HandleInheritability.Inheritable))
             {
-                using (MemoryMappedFile mmf = MemoryMappedFile.CreateNew(name, 4096, MemoryMappedFileAccess.ReadWriteExecute, MemoryMappedFileOptions.DelayAllocatePages, HandleInheritability.Inheritable))
-                {
-                    ValidateMemoryMappedFile(mmf, 4096, MemoryMappedFileAccess.ReadWrite, HandleInheritability.Inheritable);
-                }
-            });
+                ValidateMemoryMappedFile(mmf, 4096, MemoryMappedFileAccess.ReadWrite, HandleInheritability.Inheritable);
+            }
         }
 
         /// <summary>
@@ -200,21 +196,15 @@ namespace System.IO.MemoryMappedFiles.Tests
                 ValidateMemoryMappedFile(mmf, capacity);
             }
 
-            AssertExtensions.ThrowsIf<UnauthorizedAccessException>(PlatformDetection.IsWinRT && (access == MemoryMappedFileAccess.ReadExecute || access == MemoryMappedFileAccess.ReadWriteExecute), () =>
+            using (MemoryMappedFile mmf = MemoryMappedFile.CreateNew(mapName, capacity, access))
             {
-                using (MemoryMappedFile mmf = MemoryMappedFile.CreateNew(mapName, capacity, access))
-                {
-                    ValidateMemoryMappedFile(mmf, capacity, access);
-                }
-            });
+                ValidateMemoryMappedFile(mmf, capacity, access);
+            }
 
-            AssertExtensions.ThrowsIf<UnauthorizedAccessException>(PlatformDetection.IsWinRT && (access == MemoryMappedFileAccess.ReadExecute || access == MemoryMappedFileAccess.ReadWriteExecute), () =>
+            using (MemoryMappedFile mmf = MemoryMappedFile.CreateNew(mapName, capacity, access, options, inheritability))
             {
-                using (MemoryMappedFile mmf = MemoryMappedFile.CreateNew(mapName, capacity, access, options, inheritability))
-                {
-                    ValidateMemoryMappedFile(mmf, capacity, access, inheritability);
-                }
-            });
+                ValidateMemoryMappedFile(mmf, capacity, access, inheritability);
+            }
         }
 
         /// <summary>

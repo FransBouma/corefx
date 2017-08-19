@@ -43,13 +43,30 @@ namespace System.Data.SqlClient.ManualTesting.Tests
             return uniqueName;
         }
 
+        // SQL Server supports long names (up to 128 characters), add extra info for troubleshooting
+        public static string GetUniqueNameForSqlServer(string prefix)
+        {
+            string extendedPrefix = string.Format(
+                "{0}_{1}@{2}",
+                prefix,
+                Environment.UserName,
+                Environment.MachineName,
+                DateTime.Now.ToString("yyyy_MM_dd", CultureInfo.InvariantCulture));
+            string name = GetUniqueName(extendedPrefix, "[", "]");
+            if (name.Length > 128)
+            {
+                throw new ArgumentOutOfRangeException("the name is too long - SQL Server names are limited to 128");
+            }
+            return name;
+        }
+
         public static bool IsLocalDBInstalled()
         {
             string localDBInstallationFlag = Environment.GetEnvironmentVariable("TEST_LOCALDB_INSTALLED");
             if (!string.IsNullOrWhiteSpace(localDBInstallationFlag))
             {
                 int result;
-                if(int.TryParse(localDBInstallationFlag.Trim(), out result))
+                if (int.TryParse(localDBInstallationFlag.Trim(), out result))
                 {
                     return result == 1;
                 }
@@ -205,6 +222,43 @@ namespace System.Data.SqlClient.ManualTesting.Tests
         public static void ExpectAsyncFailure<TException, TInnerException>(Func<Task> actionThatFails, string exceptionMessage = null, string innerExceptionMessage = null, bool innerInnerExceptionMustBeNull = false) where TException : Exception where TInnerException : Exception
         {
             ExpectFailure<AggregateException, TException, TInnerException>(() => actionThatFails().Wait(), null, exceptionMessage, innerExceptionMessage, innerInnerExceptionMustBeNull);
+        }
+
+        public static string GenerateTableName()
+        {
+            return string.Format("TEST_{0}{1}{2}", Environment.GetEnvironmentVariable("ComputerName"), Environment.TickCount, Guid.NewGuid()).Replace('-', '_');
+        }
+
+        public static void RunNonQuery(string connectionString, string sql)
+        {
+            using (SqlConnection connection = new SqlConnection(connectionString))
+            {
+                connection.Open();
+                using (SqlCommand command = connection.CreateCommand())
+                {
+                    command.CommandText = sql;
+                    command.ExecuteNonQuery();
+                }
+            }
+        }
+
+        public static DataTable RunQuery(string connectionString, string sql)
+        {
+            DataTable result = null;
+            using (SqlConnection connection = new SqlConnection(connectionString))
+            {
+                connection.Open();
+                using (SqlCommand command = connection.CreateCommand())
+                {
+                    command.CommandText = sql;
+                    using (SqlDataReader reader = command.ExecuteReader())
+                    {
+                        result = new DataTable();
+                        result.Load(reader);
+                    }
+                }
+            }
+            return result;
         }
     }
 }

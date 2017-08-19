@@ -47,7 +47,10 @@ For Ubuntu 14.04, install the following packages:
 
 `sudo apt-get install libunwind8 libicu52 curl`
 
-For Ubuntu 16.04 LTS / Bash on Ubuntu on Windows you may need to replace libicu52 with libicu55. Ubuntu 16.10 will require libcu57.
+For Ubuntu 16.04 LTS / Bash on Ubuntu on Windows you may need to replace libicu52 with libicu55.
+Ubuntu 16.10 and Ubuntu 17.04 will require libicu57. 
+Ubuntu 17.04 also no longer provides clang-3.5 and comes with clang-3.8 by default.
+One will need to use `build.sh -Clang=clang3.8` to build native parts properly.
 
 `sudo apt-get install libunwind8 libicu55 curl`
 
@@ -56,6 +59,8 @@ in the native section should also be installed (this happens automatically on
 most systems when you install the development packages).
 
 ### macOS
+
+macOS 10.12 or higher is needed to build corefx 2.x.
 
 On macOS a few components are needed which are not provided by a default developer setup:
 * CMake

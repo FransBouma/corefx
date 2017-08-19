@@ -21,9 +21,9 @@ namespace System.IO.MemoryMappedFiles.Tests
             AssertExtensions.Throws<ArgumentNullException>("mapName", () => MemoryMappedFile.CreateOrOpen(null, 4096, MemoryMappedFileAccess.ReadWrite, MemoryMappedFileOptions.None, HandleInheritability.None));
 
             // Empty string is always an invalid map name
-            Assert.Throws<ArgumentException>(() => MemoryMappedFile.CreateOrOpen(string.Empty, 4096));
-            Assert.Throws<ArgumentException>(() => MemoryMappedFile.CreateOrOpen(string.Empty, 4096, MemoryMappedFileAccess.ReadWrite));
-            Assert.Throws<ArgumentException>(() => MemoryMappedFile.CreateOrOpen(string.Empty, 4096, MemoryMappedFileAccess.ReadWrite, MemoryMappedFileOptions.None, HandleInheritability.None));
+            AssertExtensions.Throws<ArgumentException>(null, () => MemoryMappedFile.CreateOrOpen(string.Empty, 4096));
+            AssertExtensions.Throws<ArgumentException>(null, () => MemoryMappedFile.CreateOrOpen(string.Empty, 4096, MemoryMappedFileAccess.ReadWrite));
+            AssertExtensions.Throws<ArgumentException>(null, () => MemoryMappedFile.CreateOrOpen(string.Empty, 4096, MemoryMappedFileAccess.ReadWrite, MemoryMappedFileOptions.None, HandleInheritability.None));
         }
 
         /// <summary>
@@ -177,41 +177,29 @@ namespace System.IO.MemoryMappedFiles.Tests
         public void ValidArgumentCombinations_Execute(
             string mapName, long capacity, MemoryMappedFileAccess access, MemoryMappedFileOptions options, HandleInheritability inheritability)
         {
-            AssertExtensions.ThrowsIf<UnauthorizedAccessException>(PlatformDetection.IsWinRT && (access == MemoryMappedFileAccess.ReadExecute || access == MemoryMappedFileAccess.ReadWriteExecute), () =>
+            // Map doesn't exist
+            using (MemoryMappedFile mmf = MemoryMappedFile.CreateOrOpen(mapName, capacity, access))
             {
-                // Map doesn't exist
-                using (MemoryMappedFile mmf = MemoryMappedFile.CreateOrOpen(mapName, capacity, access))
-                {
-                    ValidateMemoryMappedFile(mmf, capacity, access);
-                }
-            });
+                ValidateMemoryMappedFile(mmf, capacity, access);
+            }
 
-            AssertExtensions.ThrowsIf<UnauthorizedAccessException>(PlatformDetection.IsWinRT && (access == MemoryMappedFileAccess.ReadExecute || access == MemoryMappedFileAccess.ReadWriteExecute), () =>
+            using (MemoryMappedFile mmf = MemoryMappedFile.CreateOrOpen(mapName, capacity, access, options, inheritability))
             {
-                using (MemoryMappedFile mmf = MemoryMappedFile.CreateOrOpen(mapName, capacity, access, options, inheritability))
-                {
-                    ValidateMemoryMappedFile(mmf, capacity, access, inheritability);
-                }
-            });
+                ValidateMemoryMappedFile(mmf, capacity, access, inheritability);
+            }
 
-            AssertExtensions.ThrowsIf<UnauthorizedAccessException>(PlatformDetection.IsWinRT && (access == MemoryMappedFileAccess.ReadExecute || access == MemoryMappedFileAccess.ReadWriteExecute), () =>
+            // Map does exist (CreateNew)
+            using (MemoryMappedFile mmf = MemoryMappedFile.CreateNew(mapName, capacity, access))
+            using (MemoryMappedFile mmf2 = MemoryMappedFile.CreateOrOpen(mapName, capacity, access))
             {
-                // Map does exist (CreateNew)
-                using (MemoryMappedFile mmf = MemoryMappedFile.CreateNew(mapName, capacity, access))
-                using (MemoryMappedFile mmf2 = MemoryMappedFile.CreateOrOpen(mapName, capacity, access))
-                {
-                    ValidateMemoryMappedFile(mmf2, capacity, access);
-                }
-            });
+                ValidateMemoryMappedFile(mmf2, capacity, access);
+            }
 
-            AssertExtensions.ThrowsIf<UnauthorizedAccessException>(PlatformDetection.IsWinRT && (access == MemoryMappedFileAccess.ReadExecute || access == MemoryMappedFileAccess.ReadWriteExecute), () =>
+            using (MemoryMappedFile mmf = MemoryMappedFile.CreateNew(mapName, capacity, access, options, inheritability))
+            using (MemoryMappedFile mmf2 = MemoryMappedFile.CreateOrOpen(mapName, capacity, access, options, inheritability))
             {
-                using (MemoryMappedFile mmf = MemoryMappedFile.CreateNew(mapName, capacity, access, options, inheritability))
-                using (MemoryMappedFile mmf2 = MemoryMappedFile.CreateOrOpen(mapName, capacity, access, options, inheritability))
-                {
-                    ValidateMemoryMappedFile(mmf2, capacity, access, inheritability);
-                }
-            });
+                ValidateMemoryMappedFile(mmf2, capacity, access, inheritability);
+            }
 
             // (Avoid testing with CreateFromFile when using execute permissions.)
         }

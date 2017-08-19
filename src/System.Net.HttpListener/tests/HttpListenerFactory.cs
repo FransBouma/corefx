@@ -5,14 +5,19 @@
 using System.Collections.Generic;
 using System.Linq;
 using System.Net.Sockets;
+using System.Runtime.InteropServices;
 using System.Text;
-using Xunit;
 
 namespace System.Net.Tests
 {
     // Utilities for generating URL prefixes for HttpListener
-    internal class HttpListenerFactory : IDisposable
+    public class HttpListenerFactory : IDisposable
     {
+        const int StartPort = 1025;
+        const int MaxStartAttempts = IPEndPoint.MaxPort - StartPort + 1;
+        private static readonly object s_nextPortLock = new object();
+        private static int s_nextPort = StartPort;
+
         private readonly HttpListener _processPrefixListener;
         private readonly Exception _processPrefixException;
         private readonly string _processPrefix;
@@ -29,8 +34,9 @@ namespace System.Net.Tests
             _path = path ?? Guid.NewGuid().ToString("N");
             string pathComponent = string.IsNullOrEmpty(_path) ? _path : $"{_path}/";
 
-            for (int port = 1025; port <= IPEndPoint.MaxPort; port++)
+            for (int attempt = 0; attempt < MaxStartAttempts; attempt++)
             {
+                int port = GetNextPort();
                 string prefix = $"http://{hostname}:{port}/{pathComponent}";
 
                 var listener = new HttpListener();
@@ -153,6 +159,8 @@ namespace System.Net.Tests
 
         public byte[] GetContent(string httpVersion, string requestType, string query, string text, IEnumerable<string> headers, bool headerOnly)
         {
+            headers = headers ?? Enumerable.Empty<string>();
+
             Uri listeningUri = new Uri(ListeningUrl);
             string rawUrl = listeningUri.PathAndQuery;
             if (query != null)
@@ -160,12 +168,16 @@ namespace System.Net.Tests
                 rawUrl += query;
             }
 
-            string content = $"{requestType} {rawUrl} HTTP/{httpVersion}\r\nHost: {listeningUri.Host}\r\n";
-            if (text != null)
+            string content = $"{requestType} {rawUrl} HTTP/{httpVersion}\r\n";
+            if (!headers.Any(header => header.ToLower().StartsWith("host:")))
+            {
+                content += $"Host: { listeningUri.Host}\r\n";
+            }
+            if (text != null && !headers.Any(header => header.ToLower().StartsWith("content-length:")))
             {
                 content += $"Content-Length: {text.Length}\r\n";
             }
-            foreach (string header in headers ?? Enumerable.Empty<string>())
+            foreach (string header in headers)
             {
                 content += header + "\r\n";
             }
@@ -182,6 +194,19 @@ namespace System.Net.Tests
         public byte[] GetContent(string requestType, string text, bool headerOnly)
         {
             return GetContent("1.1", requestType, query: null, text: text, headers: null, headerOnly: headerOnly);
+        }
+
+        private static int GetNextPort()
+        {
+            lock (s_nextPortLock)
+            {
+                int port = s_nextPort++;
+                if (s_nextPort > IPEndPoint.MaxPort)
+                {
+                    s_nextPort = StartPort;
+                }
+                return port;
+            }
         }
     }
 
